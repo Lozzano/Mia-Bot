@@ -24,7 +24,7 @@
                     <p><b>Your Privacy</b></p>
 
                     <p>
-                        Liar’s Dice doesn’t store any recognisable data about you. The only thing we store are your ID’s.
+                        Mia doesn’t store any recognisable data about you. The only thing we store are your ID’s.
 
                     </p>
 

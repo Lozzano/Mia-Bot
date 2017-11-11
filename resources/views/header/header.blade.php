@@ -1,11 +1,11 @@
 <!-- Global site tag (gtag.js) - Google Analytics -->
-<script async src="https://www.googletagmanager.com/gtag/js?id=UA-58044520-2"></script>
+<script async src="https://www.googletagmanager.com/gtag/js?id=UA-58044520-3"></script>
 <script>
     window.dataLayer = window.dataLayer || [];
     function gtag(){dataLayer.push(arguments);}
     gtag('js', new Date());
 
-    gtag('config', 'UA-58044520-2');
+    gtag('config', 'UA-58044520-3');
 </script>
 
 <div class="container-fluid" style="padding:0;background: whitesmoke">
@@ -14,7 +14,7 @@
             <!-- Brand and toggle get grouped for better mobile display -->
             <div class="navbar-header">
                 <a style="color: #2c3239;font-size: 26px;font-weight: bold;"
-                   class="navbar-brand" href="/">Liar's Dice</a>
+                   class="navbar-brand" href="/">Mia Bot</a>
             </div>
             <!-- Collect the nav links, forms, and other content for toggling -->
             <div class="" id="">
@@ -22,7 +22,7 @@
                     <li><a href="/help">How-to-play</a></li>
                     <li>
 
-                        <a href="https://slack.com/oauth/authorize?&client_id=248125203971.250771295524&scope=bot">Add to Slack</a>
+                        <a href="https://slack.com/oauth/authorize?client_id=248125203971.269100408786&scope=bot">Add to Slack</a>
                     </li>
                 </ul>
             </div><!-- /.navbar-collapse -->
