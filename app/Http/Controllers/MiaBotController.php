@@ -21,9 +21,7 @@ class MiaBotController extends Controller
     protected $first_round = false;
     protected $participants;
     protected $current_call;
-    protected $dice_left_in_game;
     protected $participant_count;
-    protected $current_round_rolls;
     protected $current_participant;
     protected $current_round_participants;
     protected $current_round_participant_count;
@@ -31,8 +29,8 @@ class MiaBotController extends Controller
     protected $next_eligible_participant_order;
     protected $next_participant;
     protected $next_user;
-    protected $end_round_hits;
-    protected $end_round_dice_face_to_look_for;
+    protected $end_round_call;
+    protected $end_round_roll;
 
     protected $emoji_numbers = [
         1 => ":one:",
@@ -49,10 +47,29 @@ class MiaBotController extends Controller
 
     public function handle(BotMan $bot)
     {
-        ProcessMessage::dispatch($bot);
-        return response()->json([
-            'status' => 'success'
-        ], 200);
+        // The below is a hack to make "sync queues" work locally.
+        if(env('APP_ENV') == 'local') {
+            $msg_txt = $bot->getMessage()->getText();
+
+            if(strtolower($msg_txt) == 'start game') {
+                $this->start($bot);
+            } elseif(preg_match('/^([1-9]{0,1}[0-9]+(,|\.)[0-6])$/', $msg_txt)) {
+                $this->playRound($bot);
+            } elseif(preg_match('/^play mia.*$/', strtolower($msg_txt))) {
+                $this->host($bot);
+            } elseif(strtolower($msg_txt) == 'liar') {
+                $this->playRound($bot);
+            } elseif(strtolower($msg_txt) == 'abort game') {
+                $this->abort($bot);
+            } elseif(preg_match('/^say .*$/i', $msg_txt)) {
+                $this->say($bot);
+            }
+        }else{
+            ProcessMessage::dispatch($bot);
+            return response()->json([
+                'status' => 'success'
+            ], 200);
+        }
     }
 
     public function help(BotMan $bot)
@@ -380,7 +397,7 @@ class MiaBotController extends Controller
             $last_call_shake_check = Call::where('game_id', $this->game->id)
                 ->orderBy('created_at', 'desc')
                 ->first();
-            if($last_call_shake_check->call != 'shake') {
+            if($last_call_shake_check->call != 'shake' && $last_call_shake_check->call != 'liar') {
                 $bot->reply("You have to shake before calling something else.. Or call liar?!");
                 return;
             }
@@ -414,64 +431,41 @@ class MiaBotController extends Controller
     public function endRound(BotMan $bot)
     {
         $last_call = $this->calls->first();
-
-        $exp_last_call = explode(",", $last_call->call);
-        $dice_amount_to_look_for = $exp_last_call[0];
-        $this->end_round_dice_face_to_look_for = $exp_last_call[1];
-
-        $rolls = Roll::where('game_id', $this->game->id)
-            ->orderBy('round', 'desc')
-            ->get();
-        $this->current_round_rolls = $rolls->where('round', $rolls->first()->round)->flatten();
-
-        Log::info("[INFO] Dice amount to look for: $dice_amount_to_look_for");
-        Log::info("[INFO] Dice face to look for: $this->end_round_dice_face_to_look_for");
-
-        $this->end_round_hits = 0;
-        foreach ($this->current_round_rolls AS $rolls) {
-
-            if($this->game->staircase_enabled && $this->end_round_dice_face_to_look_for != 1) {
-                // Checking for "Trappen" (ladder).
-                $current_roll = json_decode($rolls->roll);
-                $dice_count = count($current_roll);
-                $ladder_counter = 1;
-                sort($current_roll);
-                foreach ($current_roll as $roll) {
-                    if($ladder_counter == $roll) {
-                        $ladder_counter++;
-                    }
-                }
-                if($ladder_counter == ($dice_count+1)) {
-                    $this->end_round_hits = $this->end_round_hits + $ladder_counter;
-                    continue;
-                }
-            }
-
-            foreach (json_decode($rolls->roll) as $roll) {
-                if($roll == 1) {
-                    $this->end_round_hits++;
-                }elseif($roll == $this->end_round_dice_face_to_look_for) {
-                    $this->end_round_hits++;
-                }
-            }
+        $last_roll = Roll::where('game_id', $this->game->id)
+            ->orderBy('id', 'desc')
+            ->first();
+        if($last_roll->participant_id == $this->user->id) {
+            $bot->reply("You can't call liar on your own roll..");
+            return;
         }
 
-        Log::info("[INFO] Hits: $this->end_round_hits");
+        Log::info("[INFO] Last roll to verify: $last_roll");
 
-        $loser_id = $last_call->participant_id;
-        if($this->end_round_hits >= $dice_amount_to_look_for) {
+        // If this returns true it means that the last call was TRUE.
+        if($this->compareCallAgainstRoll($last_call->call, $last_roll->roll)) {
             $loser_id = $this->user->id;
+        }else{
+            $loser_id = $last_call->participant_id;
         }
 
         $current_call = new Call;
-        $current_call->call = 'snyd';
+        $current_call->call = 'liar';
         $current_call->game_id = $this->game->id;
         $current_call->participant_id = $this->user->id;
         $current_call->participant_order = $this->current_participant->participant_order;
         $current_call->loser_id = $loser_id;
         $current_call->save();
 
-        $this->initRound($bot, $this->current_round_participants, null, $this->current_round_rolls->first()->round + 1, $loser_id);
+        $losing_participant = GameParticipant::where('game_id', $this->game->id)
+            ->where('participant_id', $loser_id)
+            ->first();
+        $losing_participant->participant_life--;
+        $losing_participant->save();
+
+        // Check if the current participant is out of the game now.
+        if($losing_participant->participant_life == 0) {
+            $this->endGame($bot, $loser_id);
+        }
 
         if($this->game->state == 'concluded') {
             return;
@@ -483,13 +477,14 @@ class MiaBotController extends Controller
         foreach ($this->current_round_participants as $participant) {
             $user = User::find($participant->participant_id);
             if($participant->participant_id == $this->next_participant->participant_id) {
-                $bot->say("<@" . $this->user->slack_id . "> called liar and *" . ($loser_id == $this->user->id ? 'LOST' : 'WON') . "*! There were *$this->end_round_hits $this->end_round_dice_face_to_look_for's*.. There are *" . $this->dice_left_in_game . "* dice left..", $user->slack_id);
+                $bot->say("<@" . $this->user->slack_id . "> called liar and *" . ($loser_id == $this->user->id ? 'LOST' : 'WON') . "*! The last roll was *$this->end_round_roll* and the last call was *$this->end_round_call*! You have *$losing_participant->participant_life* life left..", $user->slack_id);
                 $bot->say("Now it's your turn!", $user->slack_id);
+                $this->initTurn($bot, $this->next_participant);
             }elseif($participant->participant_id == $this->current_participant->participant_id) {
-                $bot->say("You called liar and *" . ($loser_id == $this->user->id ? 'LOST' : 'WON') . "*! There were *$this->end_round_hits $this->end_round_dice_face_to_look_for's*.. There are *" . $this->dice_left_in_game . "* dice left..", $user->slack_id);
+                $bot->say("You called liar and *" . ($loser_id == $this->user->id ? 'LOST' : 'WON') . "*! The last roll was *$this->end_round_roll* and the last call was *$this->end_round_call*..", $user->slack_id);
                 $bot->say("Now it's <@" . $this->next_user->slack_id . ">'s turn..", $user->slack_id);
             }else{
-                $bot->say("<@" . $this->user->slack_id . "> called liar and *" . ($loser_id == $this->user->id ? 'LOST' : 'WON') . "*! There were *$this->end_round_hits $this->end_round_dice_face_to_look_for's*.. There are *" . $this->dice_left_in_game . "* dice left..", $user->slack_id);
+                $bot->say("<@" . $this->user->slack_id . "> called liar and *" . ($loser_id == $this->user->id ? 'LOST' : 'WON') . "*! The last roll was *$this->end_round_roll* and the last call was *$this->end_round_call*..", $user->slack_id);
                 $bot->say("Now it's <@" . $this->next_user->slack_id . ">'s turn..", $user->slack_id);
             }
         }
@@ -501,9 +496,9 @@ class MiaBotController extends Controller
         foreach ($this->participants as $participant) {
             $user = User::find($participant->participant_id);
             if($looser_id == $participant->participant_id) {
-                $bot->say("You lost, there were *$this->end_round_hits $this->end_round_dice_face_to_look_for's*! Better luck next time..", $user->slack_id);
+                $bot->say("You lost the game, you have no more lives left! The last roll was *$this->end_round_roll* and the last call was *$this->end_round_call*! Better luck next time..", $user->slack_id);
             }else{
-                $bot->say("The game is over! <@" . $looser->slack_id . "> lost! Perhaps start another game?", $user->slack_id);
+                $bot->say("The game is over! <@" . $looser->slack_id . "> lost, which means you won, congrats!! Perhaps start another game?", $user->slack_id);
             }
         }
         // Setting the game state to be over.
@@ -625,7 +620,7 @@ class MiaBotController extends Controller
         }
 
         $dice = $this->rollDice();
-        sort($dice);
+        rsort($dice);
 
         $roll = new Roll;
         $roll->roll = json_encode($dice);
@@ -653,7 +648,6 @@ class MiaBotController extends Controller
     }
 
     private function isCallValid($call) {
-        echo "Call: $call \n";
         if(str_contains($call, ',')) {
             $exp_call = explode(",", $call);
             if($exp_call[0] < $exp_call[1]) {
@@ -709,6 +703,64 @@ class MiaBotController extends Controller
             return true;
         }elseif($exp_current_call[0] == $exp_previous_call[0]) {
             if($exp_current_call[1] >= $exp_previous_call[1]) {
+                return true;
+            }else{
+                return false;
+            }
+        }else{
+            return false;
+        }
+    }
+
+    private function compareCallAgainstRoll($call, $roll) {
+        // Transforming roll into mia's if applicable
+        if(str_contains($roll, 1) && str_contains($roll, 2)) {
+            $roll = 'mia';
+        }elseif(str_contains($roll, 1) && str_contains($roll, 3)) {
+            $roll = 'small mia';
+        }else{
+            $roll = str_replace(['[', ']'], '', $roll);
+        }
+
+        $this->end_round_call = $call;
+        $this->end_round_roll = $roll;
+
+        // Checking for "mia's"
+        if($roll == 'mia') {
+            return true;
+        }elseif($roll == 'small mia' && $call == 'small mia') {
+            return true;
+        }elseif($call == 'mia' && $roll == 'small mia') {
+            return false;
+        }elseif(($call == 'small mia' || $call == 'mia') && ($roll != 'small mia' || $roll != 'mia')) {
+            return false;
+        }elseif(($roll == 'small mia' || $roll == 'mia') && ($call != 'small mia' || $call != 'mia')) {
+            return true;
+        }
+
+        if(str_contains($call, ',')) {
+            $exp_call = explode(',', $call);
+        }
+        if(str_contains($roll, ',')) {
+            $exp_roll = explode(',', $roll);
+        }
+
+        // Checking for pairs
+        if($exp_call[0] == $exp_call[1] && $exp_roll[0] != $exp_roll[1]) {
+            return false;
+        }elseif($exp_call[0] == $exp_call[1] && $exp_roll[0] == $exp_roll[1]) {
+            if($exp_call[0] > $exp_roll[0]) {
+                return false;
+            }else{
+                return true;
+            }
+        }
+
+        // Checking regular calls
+        if($exp_roll[0] > $exp_call[0]) {
+            return true;
+        }elseif($exp_roll[0] == $exp_call[0]) {
+            if($exp_roll[1] >= $exp_call[1]) {
                 return true;
             }else{
                 return false;

@@ -15,7 +15,7 @@ class ProcessMessage implements ShouldQueue
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     protected $bot;
-    protected $liars_dice;
+    protected $mia;
 
     /**
      * The number of times the job may be attempted.
@@ -32,7 +32,7 @@ class ProcessMessage implements ShouldQueue
     public function __construct(BotMan $bot)
     {
         $this->bot = $bot;
-        $this->liars_dice = new MiaBotController;
+        $this->mia = new MiaBotController;
     }
 
     /**
@@ -45,17 +45,17 @@ class ProcessMessage implements ShouldQueue
         $msg_txt = $this->bot->getMessage()->getText();
 
         if(strtolower($msg_txt) == 'start game') {
-            $this->liars_dice->start($this->bot);
+            $this->mia->start($this->bot);
         } elseif(preg_match('/^([1-9]{0,1}[0-9]+(,|\.)[0-6])$/', $msg_txt)) {
-            $this->liars_dice->playRound($this->bot);
+            $this->mia->playRound($this->bot);
         } elseif(preg_match('/^play mia.*$/', strtolower($msg_txt))) {
-            $this->liars_dice->host($this->bot);
+            $this->mia->host($this->bot);
         } elseif(strtolower($msg_txt) == 'liar') {
-            $this->liars_dice->playRound($this->bot);
+            $this->mia->playRound($this->bot);
         } elseif(strtolower($msg_txt) == 'abort game') {
-            $this->liars_dice->abort($this->bot);
+            $this->mia->abort($this->bot);
         } elseif(preg_match('/^say .*$/i', $msg_txt)) {
-            $this->liars_dice->say($this->bot);
+            $this->mia->say($this->bot);
         }
     }
 }
