@@ -402,7 +402,7 @@ class MiaBotController extends Controller
                 return;
             }
             if($this->calls->first()->call != 'liar' && !$this->compareTwoCalls($this->current_call, $this->calls->first()->call)) {
-                $bot->reply("You're call was lower than the person before you, please say something else..");
+                $bot->reply("Your call was lower than the person before you, please say something else..");
                 return;
             }
             $current_call = new Call;
@@ -690,6 +690,8 @@ class MiaBotController extends Controller
         // Checking for pairs
         if($exp_previous_call[0] == $exp_previous_call[1] && $exp_current_call[0] != $exp_current_call[1]) {
             return false;
+        }elseif($exp_current_call[0] == $exp_current_call[1] && $exp_previous_call[0] != $exp_previous_call[1]) {
+            return true;
         }elseif($exp_previous_call[0] == $exp_previous_call[1] && $exp_current_call[0] == $exp_current_call[1]) {
             if($exp_previous_call[0] > $exp_current_call[0]) {
                 return false;
@@ -748,6 +750,8 @@ class MiaBotController extends Controller
         // Checking for pairs
         if($exp_call[0] == $exp_call[1] && $exp_roll[0] != $exp_roll[1]) {
             return false;
+        }elseif($exp_call[0] != $exp_call[1] && $exp_roll[0] == $exp_roll[1]) {
+            return true;
         }elseif($exp_call[0] == $exp_call[1] && $exp_roll[0] == $exp_roll[1]) {
             if($exp_call[0] > $exp_roll[0]) {
                 return false;
