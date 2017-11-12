@@ -57,7 +57,7 @@ class MiaBotController extends Controller
                 $this->playRound($bot);
             } elseif(preg_match('/^play mia.*$/', strtolower($msg_txt))) {
                 $this->host($bot);
-            } elseif(strtolower($msg_txt) == 'liar') {
+            } elseif(preg_match('/^(shake|liar).*$/', strtolower($msg_txt))) {
                 $this->playRound($bot);
             } elseif(strtolower($msg_txt) == 'abort game') {
                 $this->abort($bot);
