@@ -46,7 +46,7 @@ class ProcessMessage implements ShouldQueue
 
         if(strtolower($msg_txt) == 'start game') {
             $this->mia->start($this->bot);
-        } elseif(preg_match('/^([1-9]{0,1}[0-9]+(,|\.)[0-6])$/', $msg_txt)) {
+        } elseif(preg_match('/^([1-9]{0,1}[0-9]+(,|\.)[0-6]|small mia|mia).*$/', strtolower($msg_txt))) {
             $this->mia->playRound($this->bot);
         } elseif(preg_match('/^play mia.*$/', strtolower($msg_txt))) {
             $this->mia->host($this->bot);
