@@ -646,7 +646,7 @@ class MiaBotController extends Controller
 
     private function blindShake() {
         $this->is_blind_call = true;
-        $last_call = $this->calls->first();
+        $last_call = $this->calls->first()->call;
 
         $bs_call = new Call;
         $bs_call->call = $this->current_call;
