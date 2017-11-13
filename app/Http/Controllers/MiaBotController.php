@@ -424,12 +424,12 @@ class MiaBotController extends Controller
         foreach ($this->participants AS $participant) {
             $user = User::find($participant->participant_id);
             if($participant->participant_id == $this->next_participant->participant_id) {
-                $bot->say("<@" . $this->user->slack_id . "> called $this->current_call", $user->slack_id);
+                $bot->say("<@" . $this->user->slack_id . "> called $this->current_call "  . ($this->is_blind_call ? 'with a *blind shake*..' : ''), $user->slack_id);
                 $bot->say("Now it's your turn! Say *shake* or *liar*!", $user->slack_id);
             }elseif($participant->participant_id == $this->current_participant->participant_id) {
                 $bot->say("Now it's <@" . $this->next_user->slack_id . ">'s turn..", $user->slack_id);
             }else{
-                $bot->say("<@" . $this->user->slack_id . "> called $this->current_call", $user->slack_id);
+                $bot->say("<@" . $this->user->slack_id . "> called $this->current_call " . ($this->is_blind_call ? 'with a *blind shake*..' : ''), $user->slack_id);
                 $bot->say("Now it's <@" . $this->next_user->slack_id . ">'s turn..", $user->slack_id);
             }
         }
