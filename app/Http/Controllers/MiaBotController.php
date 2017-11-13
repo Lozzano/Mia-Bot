@@ -21,6 +21,7 @@ class MiaBotController extends Controller
     protected $first_round = false;
     protected $participants;
     protected $current_call;
+    protected $is_blind_call = false;
     protected $participant_count;
     protected $current_participant;
     protected $current_round_participants;
@@ -57,7 +58,7 @@ class MiaBotController extends Controller
                 $this->playRound($bot);
             } elseif(preg_match('/^play mia.*$/', strtolower($msg_txt))) {
                 $this->host($bot);
-            } elseif(preg_match('/^(shake|liar).*$/', strtolower($msg_txt))) {
+            } elseif(preg_match('/^(shake|blind shake|liar).*$/', strtolower($msg_txt))) {
                 $this->playRound($bot);
             } elseif(strtolower($msg_txt) == 'abort game') {
                 $this->abort($bot);
@@ -309,6 +310,7 @@ class MiaBotController extends Controller
 
         $this->calls = Call::where('game_id', $this->game->id)
             ->where('call', '!=', 'shake')
+            ->where('call', '!=', 'blind shake')
             ->orderBy('created_at', 'desc')
             ->get();
         if($this->calls->isEmpty()) {
@@ -374,6 +376,9 @@ class MiaBotController extends Controller
             $this->endRound($bot);
         }elseif($this->current_call == 'shake' && !$this->first_round) {
             $this->initTurn($bot, $this->current_participant);
+        }elseif($this->current_call == 'blind shake' && !$this->first_round) {
+            $this->blindShake();
+            $this->continueRound($bot);
         }else{
             $this->current_call = str_replace('.', ',', $this->current_call);
             if(!$this->isCallValid($this->current_call)) {
@@ -397,7 +402,10 @@ class MiaBotController extends Controller
             $last_call_shake_check = Call::where('game_id', $this->game->id)
                 ->orderBy('created_at', 'desc')
                 ->first();
-            if($last_call_shake_check->call != 'shake' && $last_call_shake_check->call != 'liar') {
+            if($last_call_shake_check->call != 'shake' &&
+                $last_call_shake_check->call != 'blind shake' &&
+                $last_call_shake_check->call != 'liar')
+            {
                 $bot->reply("You have to shake before calling something else.. Or call liar?!");
                 return;
             }
@@ -634,6 +642,29 @@ class MiaBotController extends Controller
         }
 
         $bot->say("Your roll: " . $emoji_dice, $player->slack_id);
+    }
+
+    private function blindShake() {
+        $this->is_blind_call = true;
+        $last_call = $this->calls->first();
+
+        $bs_call = new Call;
+        $bs_call->call = $this->current_call;
+        $bs_call->game_id = $this->game->id;
+        $bs_call->participant_id = $this->user->id;
+        $bs_call->participant_order = $this->current_participant->participant_order;
+        $bs_call->save();
+
+        $this->current_call = $last_call;
+
+        $dice = $this->rollDice();
+        rsort($dice);
+
+        $roll = new Roll;
+        $roll->roll = json_encode($dice);
+        $roll->game_id = $this->game->id;
+        $roll->participant_id = $this->current_participant->participant_id;
+        $roll->save();
     }
 
     private function rollDice()

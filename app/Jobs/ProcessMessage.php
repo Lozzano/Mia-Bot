@@ -50,7 +50,7 @@ class ProcessMessage implements ShouldQueue
             $this->mia->playRound($this->bot);
         } elseif(preg_match('/^play mia.*$/', strtolower($msg_txt))) {
             $this->mia->host($this->bot);
-        } elseif(preg_match('/^(shake|liar).*$/', strtolower($msg_txt))) {
+        } elseif(preg_match('/^(shake|blind shake|liar).*$/', strtolower($msg_txt))) {
             $this->mia->playRound($this->bot);
         } elseif(strtolower($msg_txt) == 'abort game') {
             $this->mia->abort($this->bot);
