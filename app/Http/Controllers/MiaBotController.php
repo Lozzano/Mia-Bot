@@ -672,7 +672,7 @@ class MiaBotController extends Controller
         $no_of_dice = 2;
         $rolls = [];
         for ($c = 0; $c != $no_of_dice; $c++) {
-            $roll = rand(1, 6);
+            $roll = random_int(1, 6);
             $rolls[] = $roll;
         }
         return $rolls;
